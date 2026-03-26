@@ -1,63 +1,19 @@
-# Networking Tools
+# Network management tools
 
-This repo is organized to hold multiple small Go tools for this network model.
+This repository contains tools for managing a home network modelled in [NetBox](https://netboxlabs.com/products/netbox/) and controlled by [UniFi Network](https://unifi.ui.com/).
 
-Today it contains:
-- `netbox_audit`: a NetBox consistency audit
+## Tools
 
-## Quick Start
+### `cmd/netbox_audit` — NetBox audit
 
-From the repo root:
+Validates the NetBox model for internal consistency. Runs 18 configurable checks covering device fields, cabling, IP addressing, VRF assignment, PoE power, DHCP reservations, module bay linkage, and more. Produces a human-readable or JSON report.
 
-```bash
-go run ./cmd/netbox_audit \
-  -netbox-base-url http://mini.dev.yanch.ar:8000 \
-  -netbox-token-file ../.netbox_api_token \
-  -format text
-```
+→ See [`cmd/netbox_audit/README.md`](cmd/netbox_audit/README.md)
 
-Minimal run requirements:
-- NetBox reachable at the configured base URL
-- a NetBox API token via `NETBOX_TOKEN` or `-netbox-token-file`
+### `..............` — Netbox/Unifi drift detection
 
-Optional:
-- `netbox_audit.config.json` if you want to override built-in policy defaults
+Compares the intended network state in NetBox against the live state reported by the UniFi controller. Reports devices, clients, and configuration that exist in one source but not the other, or that disagree between them.
 
-## Pages
+### `...............` — NetBox → UniFi sync
 
-- [`cmd/netbox_audit/CHECKS.md`](cmd/netbox_audit/CHECKS.md): what each audit check verifies, what it catches, and its current scope limitations
-- [`cmd/netbox_audit/CONFIG.md`](cmd/netbox_audit/CONFIG.md): config schema, policy knobs, and rule meanings
-- [`cmd/netbox_audit/OPERATION.md`](cmd/netbox_audit/OPERATION.md): snapshot loading, progress output, CLI flags, environment variables, and report formats
-
-## Repo Layout
-
-- `cmd/netbox_audit/`: the current audit executable and its command-specific logic
-- `internal/`: code shared between tools
-- `netbox_audit.config.json`: example policy config for `netbox_audit`
-- `go.mod`: module metadata
-
-## Typical Workflows
-
-Run the full audit:
-
-```bash
-go run ./cmd/netbox_audit -netbox-base-url http://mini.dev.yanch.ar:8000 -netbox-token-file ../.netbox_api_token
-```
-
-Emit JSON for machine consumption:
-
-```bash
-go run ./cmd/netbox_audit -format json
-```
-
-Fail CI or automation if findings exist:
-
-```bash
-go run ./cmd/netbox_audit -fail-on-findings
-```
-
-## Editing Guidance
-
-- Update `cmd/netbox_audit/CHECKS.md` when a check’s behavior, scope, or rationale changes.
-- Update `cmd/netbox_audit/CONFIG.md` when config keys or policy semantics change.
-- Update `cmd/netbox_audit/OPERATION.md` when CLI, snapshot behavior, or output behavior changes.
+Reads all configuration data from Netbox that can be automatically imported into UniFi (Currently DHCP reservations with optional DNS entries, and honeypot IP addresses) and pushes it to the UniFi controller.

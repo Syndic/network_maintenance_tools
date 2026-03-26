@@ -1,134 +1,107 @@
-# Operation
+# Operation reference
 
-## Snapshot Behavior
+## CLI flags
 
-The audit tries to evaluate one coherent NetBox snapshot.
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-netbox-base-url` | `http://mini.dev.yanch.ar:8000` | NetBox server URL |
+| `-netbox-token-file` | `.netbox_api_token` | Path to a file containing the API token |
+| `-config` | _(none)_ | Path to a JSON policy config file |
+| `-format` | `text` | Output format: `text` or `json` |
+| `-color` | `auto` | ANSI color in text output: `auto`, `always`, or `never` |
+| `-max-snapshot-attempts` | `5` | How many times to retry an incoherent snapshot |
+| `-snapshot-retry-delay` | `3s` | Delay between snapshot retries |
+| `-fail-on-findings` | `false` | Exit with code 2 if any check produces findings |
 
-Workflow:
-1. Read the latest row from NetBox changelog (`/api/core/object-changes/`)
-2. Load all required API datasets once
-3. Read the latest changelog row again
-4. If the changelog changed during loading, wait and retry
+## Environment variables
 
-Default retry behavior:
-- maximum attempts: `5`
-- delay between attempts: `3s`
+All flags can be set via environment variables. CLI flags take precedence over environment variables.
 
-If NetBox keeps changing during load, the audit exits with failure.
+| Variable | Equivalent flag |
+|----------|----------------|
+| `NETBOX_BASE_URL` | `-netbox-base-url` |
+| `NETBOX_TOKEN` | _(inline token, alternative to token file)_ |
+| `NETBOX_TOKEN_FILE` | `-netbox-token-file` |
+| `NETBOX_AUDIT_CONFIG` | `-config` |
+| `NETBOX_AUDIT_COLOR` | `-color` |
+| `NO_COLOR` | Sets color to `never` (standard convention) |
 
-## Runtime Behavior
+`NETBOX_TOKEN` lets you supply the token directly without a file, which is useful in CI environments where writing a token file is awkward.
 
-The audit gives progress feedback on `stderr`:
-- startup line with target NetBox URL and config path
-- selected checks for the run
-- snapshot attempts
-- per-collection snapshot progress, including request count, item count, and duration
-- per-check completion, including finding count and duration
+## Output: text format
 
-Text reports on `stdout` include timing summaries for:
-- total run time
-- coherent snapshot load time
-- per-collection fetch durations
-- per-check durations
+The default output is designed to be read by a human. Structure:
 
-## Running It
+```
+Snapshot: attempt 1/5, latest change #12345 at 2026-03-25T10:00:00Z
+Checks: 18 total, 3 with findings
 
-Run the default text report:
+PASS  required-device-fields (0 findings, 45ms)
+WARN  rack-placement (2 findings, 12ms)
+  - switch-core: missing U position
+  - ap-hallway-01: missing face
+...
 
-```bash
-go run ./cmd/netbox_audit
+Timing: total 1.2s, snapshot 0.8s
 ```
 
-Explicit example:
+- `PASS` lines are green, `WARN` lines are orange (when color is enabled).
+- Progress messages (snapshot retries, check completions) go to **stderr** and do not appear in the report.
+- Findings within each check are sorted alphabetically for reproducible output.
 
-```bash
-go run ./cmd/netbox_audit \
-  -netbox-base-url http://mini.dev.yanch.ar:8000 \
-  -netbox-token-file ../.netbox_api_token \
-  -format text
-```
-
-To use the example policy file explicitly:
-
-```bash
-go run ./cmd/netbox_audit -config netbox_audit.config.json
-```
-
-JSON output:
+## Output: JSON format
 
 ```bash
 go run ./cmd/netbox_audit -format json
 ```
 
-Non-zero exit when findings exist:
+Produces a single JSON document:
 
-```bash
-go run ./cmd/netbox_audit -fail-on-findings
+```json
+{
+  "snapshot": {
+    "attempts": 1,
+    "latest_change_id": 12345,
+    "latest_change_time": "2026-03-25T10:00:00Z",
+    "duration_ms": 800
+  },
+  "checks": [
+    {
+      "id": "rack-placement",
+      "name": "Rack U-position and face",
+      "status": "warn",
+      "findings": ["switch-core: missing U position"],
+      "duration_ms": 12
+    }
+  ]
+}
 ```
 
-Color control:
+JSON output is suitable for piping into `jq`, storing as an artifact, or feeding downstream tooling.
+
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success — checks ran (findings may exist unless `-fail-on-findings` was set) |
+| `1` | Fatal error — could not load snapshot, invalid config, etc. |
+| `2` | Findings found and `-fail-on-findings` was set |
+
+## Examples
 
 ```bash
-go run ./cmd/netbox_audit -color auto
-go run ./cmd/netbox_audit -color always
-go run ./cmd/netbox_audit -color never
+# Basic run with a token file
+go run ./cmd/netbox_audit -netbox-token-file ../.netbox_api_token
+
+# JSON output, suppress color, exit non-zero on findings (CI usage)
+go run ./cmd/netbox_audit \
+  -format json \
+  -color never \
+  -fail-on-findings
+
+# Use a custom policy that disables some checks
+go run ./cmd/netbox_audit -config /etc/netbox_audit/policy.json
+
+# Inline token via environment variable
+NETBOX_TOKEN=abc123 go run ./cmd/netbox_audit
 ```
-
-## CLI Flags
-
-- `-netbox-base-url`
-  - NetBox base URL
-  - default: `http://mini.dev.yanch.ar:8000`
-- `-netbox-token-file`
-  - path to a NetBox API token file
-  - default: `.netbox_api_token`
-- `-config`
-  - path to the audit policy JSON
-  - default behavior:
-    - if run from the repo root, use `netbox_audit.config.json` if present
-    - if run from `cmd/netbox_audit`, use `../../netbox_audit.config.json` if present
-    - if no config file is found, built-in defaults are used
-    - if `-config` or `NETBOX_AUDIT_CONFIG` explicitly points to a missing file, the audit fails
-- `-format`
-  - `text` or `json`
-- `-color`
-  - `auto`, `always`, or `never`
-- `-max-snapshot-attempts`
-  - coherent-snapshot retry limit
-- `-snapshot-retry-delay`
-  - wait time between snapshot retries
-- `-fail-on-findings`
-  - exit `2` if any findings are reported
-
-## Environment Variables
-
-- `NETBOX_BASE_URL`
-  - overrides default base URL
-- `NETBOX_TOKEN`
-  - if set, used directly instead of reading a token file
-- `NETBOX_TOKEN_FILE`
-  - overrides default token file
-- `NETBOX_AUDIT_CONFIG`
-  - overrides default config path
-  - if set to a missing file, the audit fails
-- `NETBOX_AUDIT_COLOR`
-  - same values as `-color`
-- `NO_COLOR`
-  - disables color in `auto` mode
-
-CLI flags take precedence over environment-variable defaults.
-
-## Output
-
-Text mode:
-- prints progress on `stderr`
-- prints snapshot metadata, timing, and one section per check on `stdout`
-- uses colored status labels when enabled:
-  - `PASS` = green
-  - `WARN` = orange
-  - `FAIL` = red
-
-JSON mode:
-- emits one JSON document with:
-  - `snapshot`
-  - `checks`
