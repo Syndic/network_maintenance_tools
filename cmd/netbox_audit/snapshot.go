@@ -230,7 +230,38 @@ func loadSnapshot(ctx context.Context, c *netboxapi.Client, reporter *progressRe
 	}
 	snap.LoadStats.RequestCount = totalRequests
 	snap.LoadStats.Fetches = fetches
+	snap.buildIndexes()
 	return snap, nil
+}
+
+// buildIndexes pre-computes lookup maps that are used by multiple audit
+// checks.  Building them here — once, after all data is fetched — means the
+// parallel checks can share read-only maps instead of each independently
+// iterating the same slices.
+func (s *snapshot) buildIndexes() {
+	s.DevicesByID = make(map[int]device, len(s.Devices))
+	for _, d := range s.Devices {
+		s.DevicesByID[d.ID] = d
+	}
+
+	s.InterfacesByID = make(map[int]iface, len(s.Interfaces))
+	s.InterfacesByDevice = make(map[int][]iface)
+	for _, it := range s.Interfaces {
+		s.InterfacesByID[it.ID] = it
+		s.InterfacesByDevice[it.Device.ID] = append(s.InterfacesByDevice[it.Device.ID], it)
+	}
+
+	s.IPsByInterface = make(map[int][]ipAddress)
+	for _, ip := range s.IPAddresses {
+		if ip.AssignedObjectType == objectTypeInterface {
+			s.IPsByInterface[ip.AssignedObjectID] = append(s.IPsByInterface[ip.AssignedObjectID], ip)
+		}
+	}
+
+	s.ModuleBaysByID = make(map[int]moduleBay, len(s.ModuleBays))
+	for _, mb := range s.ModuleBays {
+		s.ModuleBaysByID[mb.ID] = mb
+	}
 }
 
 func fetchAll[T any](ctx context.Context, client *netboxapi.Client, path string) ([]T, fetchTiming, error) {

@@ -304,6 +304,13 @@ type snapshot struct {
 	Prefixes                   []prefix
 	Cables                     []cable
 	MACAddresses               []macAddressRecord
+
+	// Pre-computed indexes — built once after fetch, used by all parallel checks.
+	DevicesByID        map[int]device
+	InterfacesByID     map[int]iface
+	InterfacesByDevice map[int][]iface
+	IPsByInterface     map[int][]ipAddress
+	ModuleBaysByID     map[int]moduleBay
 }
 
 type snapshotLoadStats struct {

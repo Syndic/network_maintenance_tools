@@ -36,16 +36,12 @@ func auditDeviceLocations(s snapshot) checkResult {
 }
 
 func auditParentPlacement(s snapshot) checkResult {
-	deviceByID := map[int]device{}
-	for _, d := range s.Devices {
-		deviceByID[d.ID] = d
-	}
 	var findings []string
 	for _, d := range s.Devices {
 		if d.ParentDevice == nil {
 			continue
 		}
-		parent, ok := deviceByID[d.ParentDevice.ID]
+		parent, ok := s.DevicesByID[d.ParentDevice.ID]
 		if !ok {
 			findings = append(findings, fmt.Sprintf("%s references missing parent device id=%d", d.Name, d.ParentDevice.ID))
 			continue
@@ -353,12 +349,9 @@ func (c componentDriftCheck) expectedForDevice(deviceTypeID int, modules []modul
 }
 
 func auditWirelessNormalization(s snapshot, cfg auditConfig) checkResult {
-	ipsByInterface := ipAssignmentsByInterface(s.IPAddresses)
-	ifacesByDevice := interfacesByDevice(s.Interfaces)
-	devicesByID := devicesByID(s.Devices)
 	var findings []string
-	for deviceID, ifaces := range ifacesByDevice {
-		dev := devicesByID[deviceID]
+	for deviceID, ifaces := range s.InterfacesByDevice {
+		dev := s.DevicesByID[deviceID]
 		if dev.Role.Name == roleAccessPoint || dev.Status.Value == deviceStatusPlanned {
 			continue
 		}
@@ -370,7 +363,7 @@ func auditWirelessNormalization(s snapshot, cfg auditConfig) checkResult {
 			if !it.Enabled {
 				continue
 			}
-			if wiredInterfaceComplete(it, ipsByInterface[it.ID]) {
+			if wiredInterfaceComplete(it, s.IPsByInterface[it.ID]) {
 				wiredComplete = true
 				break
 			}
@@ -408,10 +401,6 @@ func auditPOEPower(s snapshot, cfg auditConfig) checkResult {
 	if !cfg.Rules.PoEPower.CheckPoweredDeviceSupply {
 		return checkResult{Name: "PoE Power Sufficiency"}
 	}
-	ifaceByID := map[int]iface{}
-	for _, loaded := range s.Interfaces {
-		ifaceByID[loaded.ID] = loaded
-	}
 	var findings []string
 	for _, it := range s.Interfaces {
 		if choiceValue(it.POEMode) != poeModePD || !it.Enabled || len(it.ConnectedEndpoints) == 0 {
@@ -420,7 +409,7 @@ func auditPOEPower(s snapshot, cfg auditConfig) checkResult {
 		requiredType := choiceValue(it.POEType)
 		matchedPeer := false
 		for _, ep := range it.ConnectedEndpoints {
-			peer, ok := ifaceByID[ep.ID]
+			peer, ok := s.InterfacesByID[ep.ID]
 			if !ok {
 				continue
 			}
@@ -450,21 +439,19 @@ func auditInterfaceVRF(s snapshot, cfg auditConfig) checkResult {
 	if !cfg.Rules.InterfaceVRF.RequireOnInterfaces {
 		return checkResult{Name: "Interface VRF Coverage"}
 	}
-	devicesByID := devicesByID(s.Devices)
-	ipsByInterface := ipAssignmentsByInterface(s.IPAddresses)
 	var findings []string
 	for _, it := range s.Interfaces {
-		dev := devicesByID[it.Device.ID]
+		dev := s.DevicesByID[it.Device.ID]
 		if dev.Status.Value == deviceStatusPlanned || !it.Enabled {
 			continue
 		}
 		if it.VRF != nil {
 			continue
 		}
-		if isWANInterface(it, dev, devicesByID, cfg) {
+		if isWANInterface(it, dev, s.DevicesByID, cfg) {
 			continue
 		}
-		if !(len(it.ConnectedEndpoints) > 0 || len(ipsByInterface[it.ID]) > 0 || interfaceHasMAC(it) || it.Mode != nil || it.UntaggedVLAN != nil) {
+		if !(len(it.ConnectedEndpoints) > 0 || len(s.IPsByInterface[it.ID]) > 0 || interfaceHasMAC(it) || it.Mode != nil || it.UntaggedVLAN != nil) {
 			continue
 		}
 		findings = append(findings, fmt.Sprintf("%s %s is missing VRF", dev.Name, it.Name))
@@ -495,18 +482,13 @@ func auditPrivateIPVRF(s snapshot, cfg auditConfig) checkResult {
 }
 
 func auditIPVLANConsistency(s snapshot) checkResult {
-	ifaceByID := map[int]iface{}
-	deviceByID := devicesByID(s.Devices)
-	for _, it := range s.Interfaces {
-		ifaceByID[it.ID] = it
-	}
 	prefixes := parsePrefixes(s.Prefixes)
 	var findings []string
 	for _, ip := range s.IPAddresses {
 		if ip.AssignedObjectType != objectTypeInterface {
 			continue
 		}
-		it, ok := ifaceByID[ip.AssignedObjectID]
+		it, ok := s.InterfacesByID[ip.AssignedObjectID]
 		if !ok || it.Mode == nil || it.Mode.Value != vlanModeAccess || it.UntaggedVLAN == nil {
 			continue
 		}
@@ -519,7 +501,7 @@ func auditIPVLANConsistency(s snapshot) checkResult {
 			continue
 		}
 		if match.VLAN.ID != it.UntaggedVLAN.ID {
-			findings = append(findings, fmt.Sprintf("%s %s carries %s but access VLAN is %s and best prefix VLAN is %s", deviceByID[it.Device.ID].Name, it.Name, ip.Address, it.UntaggedVLAN.Name, match.VLAN.Name))
+			findings = append(findings, fmt.Sprintf("%s %s carries %s but access VLAN is %s and best prefix VLAN is %s", s.DevicesByID[it.Device.ID].Name, it.Name, ip.Address, it.UntaggedVLAN.Name, match.VLAN.Name))
 		}
 	}
 	sort.Strings(findings)
@@ -571,10 +553,6 @@ func auditPatchPanelContinuity(s snapshot) checkResult {
 }
 
 func auditModuleConsistency(s snapshot) checkResult {
-	moduleBaysByID := map[int]moduleBay{}
-	for _, mb := range s.ModuleBays {
-		moduleBaysByID[mb.ID] = mb
-	}
 	modsByBay := map[int][]module{}
 	var findings []string
 	for _, mod := range s.Modules {
@@ -582,7 +560,7 @@ func auditModuleConsistency(s snapshot) checkResult {
 			findings = append(findings, fmt.Sprintf("%s module %d has no module bay", mod.Device.Name, mod.ID))
 			continue
 		}
-		mb, ok := moduleBaysByID[mod.ModuleBay.ID]
+		mb, ok := s.ModuleBaysByID[mod.ModuleBay.ID]
 		if !ok {
 			findings = append(findings, fmt.Sprintf("%s module %d references missing module bay %d", mod.Device.Name, mod.ID, mod.ModuleBay.ID))
 			continue
@@ -598,7 +576,7 @@ func auditModuleConsistency(s snapshot) checkResult {
 			for _, mod := range mods {
 				ids = append(ids, fmt.Sprintf("%d", mod.ID))
 			}
-			mb := moduleBaysByID[bayID]
+			mb := s.ModuleBaysByID[bayID]
 			findings = append(findings, fmt.Sprintf("%s module bay %s has multiple installed modules (%s)", mb.Device.Name, mb.Name, strings.Join(ids, ", ")))
 		}
 	}
@@ -651,10 +629,6 @@ func auditMACConsistency(s snapshot) checkResult {
 }
 
 func auditDHCPReservations(s snapshot) checkResult {
-	ifaceByID := map[int]iface{}
-	for _, it := range s.Interfaces {
-		ifaceByID[it.ID] = it
-	}
 	reservedRanges := taggedRanges(s.IPRanges, tagDHCPReserved)
 	poolRanges := taggedRanges(s.IPRanges, tagDHCPPool)
 	var findings []string
@@ -667,7 +641,7 @@ func auditDHCPReservations(s snapshot) checkResult {
 			findings = append(findings, fmt.Sprintf("%s is tagged dhcp-reserved but is not assigned to an interface", ip.Address))
 			continue
 		}
-		it, ok := ifaceByID[ip.AssignedObjectID]
+		it, ok := s.InterfacesByID[ip.AssignedObjectID]
 		if !ok {
 			findings = append(findings, fmt.Sprintf("%s is tagged dhcp-reserved but assigned interface %d was not loaded", ip.Address, ip.AssignedObjectID))
 			continue
@@ -688,18 +662,16 @@ func auditDHCPReservations(s snapshot) checkResult {
 }
 
 func auditPlannedDevices(s snapshot) checkResult {
-	ipsByInterface := ipAssignmentsByInterface(s.IPAddresses)
-	ifacesByDevice := interfacesByDevice(s.Interfaces)
 	var findings []string
 	for _, d := range s.Devices {
 		if d.Status.Value != deviceStatusPlanned {
 			continue
 		}
-		for _, it := range ifacesByDevice[d.ID] {
+		for _, it := range s.InterfacesByDevice[d.ID] {
 			if len(it.ConnectedEndpoints) > 0 {
 				findings = append(findings, fmt.Sprintf("planned device %s has a connected interface %s", d.Name, it.Name))
 			}
-			if len(ipsByInterface[it.ID]) > 0 {
+			if len(s.IPsByInterface[it.ID]) > 0 {
 				findings = append(findings, fmt.Sprintf("planned device %s has IPs assigned to interface %s", d.Name, it.Name))
 			}
 			if interfaceHasMAC(it) {
@@ -712,11 +684,6 @@ func auditPlannedDevices(s snapshot) checkResult {
 }
 
 func auditSwitchLinkSymmetry(s snapshot) checkResult {
-	ifaceByID := map[int]iface{}
-	deviceByID := devicesByID(s.Devices)
-	for _, it := range s.Interfaces {
-		ifaceByID[it.ID] = it
-	}
 	var findings []string
 	for _, c := range s.Cables {
 		if len(c.ATerminations) != 1 || len(c.BTerminations) != 1 {
@@ -727,13 +694,13 @@ func auditSwitchLinkSymmetry(s snapshot) checkResult {
 		if a.ObjectType != objectTypeInterface || b.ObjectType != objectTypeInterface {
 			continue
 		}
-		ia, oka := ifaceByID[a.ObjectID]
-		ib, okb := ifaceByID[b.ObjectID]
+		ia, oka := s.InterfacesByID[a.ObjectID]
+		ib, okb := s.InterfacesByID[b.ObjectID]
 		if !oka || !okb {
 			continue
 		}
-		da := deviceByID[ia.Device.ID]
-		db := deviceByID[ib.Device.ID]
+		da := s.DevicesByID[ia.Device.ID]
+		db := s.DevicesByID[ib.Device.ID]
 		if da.Role.Name != roleSwitch || db.Role.Name != roleSwitch {
 			continue
 		}

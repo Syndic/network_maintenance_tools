@@ -74,9 +74,14 @@ func main() {
 	}
 
 	client := &netboxapi.Client{
-		BaseURL:    strings.TrimRight(*baseURL, "/"),
-		Token:      token,
-		HTTPClient: &http.Client{Timeout: 60 * time.Second},
+		BaseURL: strings.TrimRight(*baseURL, "/"),
+		Token:   token,
+		HTTPClient: &http.Client{
+			Timeout: 60 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConnsPerHost: snapshotTaskCount(),
+			},
+		},
 	}
 	reporter := newProgressReporter()
 	configLabel := "built-in defaults"

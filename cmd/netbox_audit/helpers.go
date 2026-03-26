@@ -74,31 +74,6 @@ func sameSwitchPortConfig(a, b iface) bool {
 	return true
 }
 
-func interfacesByDevice(ifaces []iface) map[int][]iface {
-	out := map[int][]iface{}
-	for _, it := range ifaces {
-		out[it.Device.ID] = append(out[it.Device.ID], it)
-	}
-	return out
-}
-
-func devicesByID(devices []device) map[int]device {
-	out := map[int]device{}
-	for _, d := range devices {
-		out[d.ID] = d
-	}
-	return out
-}
-
-func ipAssignmentsByInterface(ips []ipAddress) map[int][]ipAddress {
-	out := map[int][]ipAddress{}
-	for _, ip := range ips {
-		if ip.AssignedObjectType == objectTypeInterface {
-			out[ip.AssignedObjectID] = append(out[ip.AssignedObjectID], ip)
-		}
-	}
-	return out
-}
 
 func parsePrefixes(prefixes []prefix) []parsedPrefix {
 	out := make([]parsedPrefix, 0, len(prefixes))
