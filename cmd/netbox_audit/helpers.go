@@ -11,13 +11,13 @@ import (
 
 func poeSupplySufficient(supplyType, requiredType string, cfg auditConfig) (bool, string) {
 	if requiredType == "" {
-		if cfg.Rules.PoE.UnknownTypePolicy == poeUnknownTypeIgnore {
+		if cfg.Rules.PoEPower.UnknownTypePolicy == poeUnknownTypeIgnore {
 			return true, ""
 		}
 		return false, "PD interface is missing poe_type"
 	}
 	if supplyType == "" {
-		if cfg.Rules.PoE.UnknownTypePolicy == poeUnknownTypeIgnore {
+		if cfg.Rules.PoEPower.UnknownTypePolicy == poeUnknownTypeIgnore {
 			return true, ""
 		}
 		return false, "PSE interface is missing poe_type"
@@ -33,7 +33,7 @@ func poeSupplySufficient(supplyType, requiredType string, cfg auditConfig) (bool
 			return false, "PSE PoE type is weaker than PD requirement"
 		}
 	}
-	if cfg.Rules.PoE.UnknownTypePolicy == poeUnknownTypeIgnore {
+	if cfg.Rules.PoEPower.UnknownTypePolicy == poeUnknownTypeIgnore {
 		return true, ""
 	}
 	return false, "PoE types are not directly comparable"

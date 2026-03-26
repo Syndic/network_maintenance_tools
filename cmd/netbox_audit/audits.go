@@ -379,20 +379,20 @@ func auditWirelessNormalization(s snapshot, cfg auditConfig) checkResult {
 			if !isWirelessType(it.Type.Value) || !it.Enabled {
 				continue
 			}
-			if it.Mode != nil && it.UntaggedVLAN != nil && (!cfg.Rules.Wireless.RequirePrimaryMAC || it.PrimaryMACAddress != nil) {
+			if it.Mode != nil && it.UntaggedVLAN != nil && (!cfg.Rules.WirelessNormalization.RequirePrimaryMAC || it.PrimaryMACAddress != nil) {
 				continue
 			}
-			if cfg.Rules.Wireless.SuppressIfConnectedWiredInterfaceIsComplete && wiredComplete {
+			if cfg.Rules.WirelessNormalization.SuppressIfConnectedWiredInterfaceIsComplete && wiredComplete {
 				continue
 			}
 			missing := []string{}
-			if cfg.Rules.Wireless.RequireMode && it.Mode == nil {
+			if cfg.Rules.WirelessNormalization.RequireMode && it.Mode == nil {
 				missing = append(missing, "mode")
 			}
-			if cfg.Rules.Wireless.RequireUntaggedVLAN && it.UntaggedVLAN == nil {
+			if cfg.Rules.WirelessNormalization.RequireUntaggedVLAN && it.UntaggedVLAN == nil {
 				missing = append(missing, "untagged_vlan")
 			}
-			if cfg.Rules.Wireless.RequirePrimaryMAC && it.PrimaryMACAddress == nil {
+			if cfg.Rules.WirelessNormalization.RequirePrimaryMAC && it.PrimaryMACAddress == nil {
 				missing = append(missing, "primary_mac_address")
 			}
 			if len(missing) > 0 {
@@ -405,7 +405,7 @@ func auditWirelessNormalization(s snapshot, cfg auditConfig) checkResult {
 }
 
 func auditPOEPower(s snapshot, cfg auditConfig) checkResult {
-	if !cfg.Rules.PoE.CheckPoweredDeviceSupply {
+	if !cfg.Rules.PoEPower.CheckPoweredDeviceSupply {
 		return checkResult{Name: "PoE Power Sufficiency"}
 	}
 	ifaceByID := map[int]iface{}
@@ -425,7 +425,7 @@ func auditPOEPower(s snapshot, cfg auditConfig) checkResult {
 				continue
 			}
 			matchedPeer = true
-			if cfg.Rules.PoE.RequirePSEModeOnPeer && choiceValue(peer.POEMode) != poeModePSE {
+			if cfg.Rules.PoEPower.RequirePSEModeOnPeer && choiceValue(peer.POEMode) != poeModePSE {
 				findings = append(findings, fmt.Sprintf("%s %s requires PoE but peer %s %s is not modeled as a PSE interface", it.Device.Name, it.Name, peer.Device.Name, peer.Name))
 				continue
 			}
@@ -447,7 +447,7 @@ func auditPOEPower(s snapshot, cfg auditConfig) checkResult {
 }
 
 func auditInterfaceVRF(s snapshot, cfg auditConfig) checkResult {
-	if !cfg.Rules.VRF.RequireOnInterfaces {
+	if !cfg.Rules.InterfaceVRF.RequireOnInterfaces {
 		return checkResult{Name: "Interface VRF Coverage"}
 	}
 	devicesByID := devicesByID(s.Devices)
@@ -481,12 +481,12 @@ func auditPrivateIPVRF(s snapshot, cfg auditConfig) checkResult {
 			continue
 		}
 		if addr.IsPrivate() {
-			if cfg.Rules.VRF.RequireOnPrivateIPs && ip.VRF == nil {
+			if cfg.Rules.PrivateIPVRF.RequireOnPrivateIPs && ip.VRF == nil {
 				findings = append(findings, fmt.Sprintf("%s is private but has no VRF", ip.Address))
 			}
 			continue
 		}
-		if cfg.Rules.VRF.RequireOnPublicIPs && ip.VRF == nil {
+		if cfg.Rules.PrivateIPVRF.RequireOnPublicIPs && ip.VRF == nil {
 			findings = append(findings, fmt.Sprintf("%s is public but has no VRF", ip.Address))
 		}
 	}

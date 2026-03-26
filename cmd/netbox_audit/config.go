@@ -23,24 +23,24 @@ type auditConfig struct {
 }
 
 type auditRules struct {
-	WAN           wanRules           `json:"wan"`
-	VRF           vrfRules           `json:"vrf"`
-	Wireless      wirelessRules      `json:"wireless"`
-	RackPlacement rackPlacementRules `json:"rack_placement"`
-	PoE           poeRules           `json:"poe"`
+	InterfaceVRF          interfaceVRFRules          `json:"interface-vrf"`
+	PrivateIPVRF          privateIPVRFRules          `json:"private-ip-vrf"`
+	WirelessNormalization wirelessNormalizationRules `json:"wireless-normalization"`
+	RackPlacement         rackPlacementRules         `json:"rack-placement"`
+	PoEPower              poePowerRules              `json:"poe-power"`
 }
 
-type wanRules struct {
-	DeviceRoles []string `json:"device_roles"`
+type interfaceVRFRules struct {
+	WANDeviceRoles      []string `json:"wan_device_roles"`
+	RequireOnInterfaces bool     `json:"require_on_interfaces"`
 }
 
-type vrfRules struct {
+type privateIPVRFRules struct {
 	RequireOnPrivateIPs bool `json:"require_on_private_ips"`
 	RequireOnPublicIPs  bool `json:"require_on_public_ips"`
-	RequireOnInterfaces bool `json:"require_on_interfaces"`
 }
 
-type wirelessRules struct {
+type wirelessNormalizationRules struct {
 	SuppressIfConnectedWiredInterfaceIsComplete bool `json:"suppress_if_connected_wired_interface_is_complete"`
 	RequireMode                                 bool `json:"require_mode"`
 	RequireUntaggedVLAN                         bool `json:"require_untagged_vlan"`
@@ -52,7 +52,7 @@ type rackPlacementRules struct {
 	ExemptDeviceTags   []string `json:"exempt_device_tags"`
 }
 
-type poeRules struct {
+type poePowerRules struct {
 	CheckPoweredDeviceSupply bool   `json:"check_powered_device_supply"`
 	RequirePSEModeOnPeer     bool   `json:"require_pse_mode_on_peer"`
 	UnknownTypePolicy        string `json:"unknown_type_policy"`
@@ -66,15 +66,15 @@ type checksConfig struct {
 func defaultAuditConfig() auditConfig {
 	return auditConfig{
 		Rules: auditRules{
-			WAN: wanRules{
-				DeviceRoles: []string{"ISP Equipment"},
-			},
-			VRF: vrfRules{
-				RequireOnPrivateIPs: true,
-				RequireOnPublicIPs:  false,
+			InterfaceVRF: interfaceVRFRules{
+				WANDeviceRoles:      []string{"ISP Equipment"},
 				RequireOnInterfaces: true,
 			},
-			Wireless: wirelessRules{
+			PrivateIPVRF: privateIPVRFRules{
+				RequireOnPrivateIPs: true,
+				RequireOnPublicIPs:  false,
+			},
+			WirelessNormalization: wirelessNormalizationRules{
 				SuppressIfConnectedWiredInterfaceIsComplete: true,
 				RequireMode:         true,
 				RequireUntaggedVLAN: true,
@@ -84,7 +84,7 @@ func defaultAuditConfig() auditConfig {
 				ExemptChildDevices: true,
 				ExemptDeviceTags:   []string{"0u-rack-device"},
 			},
-			PoE: poeRules{
+			PoEPower: poePowerRules{
 				CheckPoweredDeviceSupply: true,
 				RequirePSEModeOnPeer:     true,
 				UnknownTypePolicy:        poeUnknownTypeFail,
@@ -134,21 +134,21 @@ func defaultConfigPath() string {
 }
 
 func (c *auditConfig) compile() error {
-	c.compiledWANRoleSet = make(map[string]bool, len(c.Rules.WAN.DeviceRoles))
-	for _, role := range c.Rules.WAN.DeviceRoles {
+	c.compiledWANRoleSet = make(map[string]bool, len(c.Rules.InterfaceVRF.WANDeviceRoles))
+	for _, role := range c.Rules.InterfaceVRF.WANDeviceRoles {
 		c.compiledWANRoleSet[strings.TrimSpace(role)] = true
 	}
 	c.compiledRackTagSet = make(map[string]bool, len(c.Rules.RackPlacement.ExemptDeviceTags))
 	for _, tag := range c.Rules.RackPlacement.ExemptDeviceTags {
 		c.compiledRackTagSet[strings.TrimSpace(tag)] = true
 	}
-	switch strings.ToLower(strings.TrimSpace(c.Rules.PoE.UnknownTypePolicy)) {
+	switch strings.ToLower(strings.TrimSpace(c.Rules.PoEPower.UnknownTypePolicy)) {
 	case "", poeUnknownTypeFail:
-		c.Rules.PoE.UnknownTypePolicy = poeUnknownTypeFail
+		c.Rules.PoEPower.UnknownTypePolicy = poeUnknownTypeFail
 	case poeUnknownTypeIgnore:
-		c.Rules.PoE.UnknownTypePolicy = poeUnknownTypeIgnore
+		c.Rules.PoEPower.UnknownTypePolicy = poeUnknownTypeIgnore
 	default:
-		return fmt.Errorf("unsupported poe.unknown_type_policy %q", c.Rules.PoE.UnknownTypePolicy)
+		return fmt.Errorf("unsupported poe-power.unknown_type_policy %q", c.Rules.PoEPower.UnknownTypePolicy)
 	}
 	return nil
 }
