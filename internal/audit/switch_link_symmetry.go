@@ -1,12 +1,13 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"sort"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditSwitchLinkSymmetry(s netbox.Snapshot) checkResult {
+func SwitchLinkSymmetry(s netbox.Snapshot) CheckResult {
 	var findings []string
 	for _, c := range s.Cables {
 		if len(c.ATerminations) != 1 || len(c.BTerminations) != 1 {
@@ -24,7 +25,7 @@ func auditSwitchLinkSymmetry(s netbox.Snapshot) checkResult {
 		}
 		da := s.DevicesByID[ia.Device.ID]
 		db := s.DevicesByID[ib.Device.ID]
-		if da.Role.Name != roleSwitch || db.Role.Name != roleSwitch {
+		if da.Role.Name != RoleSwitch || db.Role.Name != RoleSwitch {
 			continue
 		}
 		if !sameSwitchPortConfig(ia, ib) {
@@ -32,5 +33,5 @@ func auditSwitchLinkSymmetry(s netbox.Snapshot) checkResult {
 		}
 	}
 	sort.Strings(findings)
-	return checkResult{Name: "Switch Link Symmetry", Findings: findings}
+	return CheckResult{Name: "Switch Link Symmetry", Findings: findings}
 }

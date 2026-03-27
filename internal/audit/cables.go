@@ -1,13 +1,14 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"sort"
 	"strings"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditCables(s netbox.Snapshot) checkResult {
+func Cables(s netbox.Snapshot) CheckResult {
 	var findings []string
 	for _, c := range s.Cables {
 		if c.Type == "" {
@@ -21,7 +22,7 @@ func auditCables(s netbox.Snapshot) checkResult {
 		}
 	}
 	sort.Strings(findings)
-	return checkResult{Name: "Cable Consistency", Findings: findings}
+	return CheckResult{Name: "Cable Consistency", Findings: findings}
 }
 
 func missingCableSide(c netbox.Cable) string {

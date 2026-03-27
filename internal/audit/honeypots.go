@@ -1,16 +1,17 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"net/netip"
 	"sort"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditHoneypots(s netbox.Snapshot) checkResult {
+func Honeypots(s netbox.Snapshot) CheckResult {
 	var honeypots []netbox.IPAddress
 	for _, ip := range s.IPAddresses {
-		if hasTag(ip.Tags, tagHoneypot) {
+		if hasTag(ip.Tags, TagHoneypot) {
 			honeypots = append(honeypots, ip)
 		}
 	}
@@ -76,5 +77,5 @@ func auditHoneypots(s netbox.Snapshot) checkResult {
 	}
 
 	sort.Strings(findings)
-	return checkResult{Name: "Honeypot Coverage", Findings: findings}
+	return CheckResult{Name: "Honeypot Coverage", Findings: findings}
 }

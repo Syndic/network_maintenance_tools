@@ -1,12 +1,13 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"sort"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditParentPlacement(s netbox.Snapshot) checkResult {
+func ParentPlacement(s netbox.Snapshot) CheckResult {
 	var findings []string
 	for _, d := range s.Devices {
 		if d.ParentDevice == nil {
@@ -33,5 +34,5 @@ func auditParentPlacement(s netbox.Snapshot) checkResult {
 		}
 	}
 	sort.Strings(findings)
-	return checkResult{Name: "Parent Placement Consistency", Findings: findings}
+	return CheckResult{Name: "Parent Placement Consistency", Findings: findings}
 }

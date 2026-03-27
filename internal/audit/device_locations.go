@@ -1,12 +1,13 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"sort"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditDeviceLocations(s netbox.Snapshot) checkResult {
+func DeviceLocations(s netbox.Snapshot) CheckResult {
 	var findings []string
 	for _, d := range s.Devices {
 		if d.Location == nil {
@@ -14,5 +15,5 @@ func auditDeviceLocations(s netbox.Snapshot) checkResult {
 		}
 	}
 	sort.Strings(findings)
-	return checkResult{Name: "Device Locations", Findings: findings}
+	return CheckResult{Name: "Device Locations", Findings: findings}
 }

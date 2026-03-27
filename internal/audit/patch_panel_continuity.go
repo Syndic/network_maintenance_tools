@@ -1,12 +1,13 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"sort"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditPatchPanelContinuity(s netbox.Snapshot) checkResult {
+func PatchPanelContinuity(s netbox.Snapshot) CheckResult {
 	var findings []string
 	for _, rp := range s.RearPorts {
 		if rp.Cable != nil && len(rp.FrontPorts) == 0 {
@@ -19,5 +20,5 @@ func auditPatchPanelContinuity(s netbox.Snapshot) checkResult {
 		}
 	}
 	sort.Strings(findings)
-	return checkResult{Name: "Patch Panel Continuity", Findings: findings}
+	return CheckResult{Name: "Patch Panel Continuity", Findings: findings}
 }

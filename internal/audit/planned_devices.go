@@ -1,15 +1,16 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"sort"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditPlannedDevices(s netbox.Snapshot) checkResult {
+func PlannedDevices(s netbox.Snapshot) CheckResult {
 	var findings []string
 	for _, d := range s.Devices {
-		if d.Status.Value != deviceStatusPlanned {
+		if d.Status.Value != DeviceStatusPlanned {
 			continue
 		}
 		for _, it := range s.InterfacesByDevice[d.ID] {
@@ -25,5 +26,5 @@ func auditPlannedDevices(s netbox.Snapshot) checkResult {
 		}
 	}
 	sort.Strings(findings)
-	return checkResult{Name: "Planned Device Hygiene", Findings: findings}
+	return CheckResult{Name: "Planned Device Hygiene", Findings: findings}
 }

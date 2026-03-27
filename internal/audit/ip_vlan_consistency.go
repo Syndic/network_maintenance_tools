@@ -1,12 +1,13 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"sort"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditIPVLANConsistency(s netbox.Snapshot) checkResult {
+func IPVLANConsistency(s netbox.Snapshot) CheckResult {
 	prefixes := parsePrefixes(s.Prefixes)
 	var findings []string
 	for _, ip := range s.IPAddresses {
@@ -14,7 +15,7 @@ func auditIPVLANConsistency(s netbox.Snapshot) checkResult {
 			continue
 		}
 		it, ok := s.InterfacesByID[ip.AssignedObjectID]
-		if !ok || it.Mode == nil || it.Mode.Value != vlanModeAccess || it.UntaggedVLAN == nil {
+		if !ok || it.Mode == nil || it.Mode.Value != VLANModeAccess || it.UntaggedVLAN == nil {
 			continue
 		}
 		addr, ok := bareAddr(ip.Address)
@@ -30,5 +31,5 @@ func auditIPVLANConsistency(s netbox.Snapshot) checkResult {
 		}
 	}
 	sort.Strings(findings)
-	return checkResult{Name: "IP / VLAN Consistency", Findings: findings}
+	return CheckResult{Name: "IP / VLAN Consistency", Findings: findings}
 }

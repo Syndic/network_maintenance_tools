@@ -1,13 +1,14 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"sort"
 	"strings"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditMACConsistency(s netbox.Snapshot) checkResult {
+func MACConsistency(s netbox.Snapshot) CheckResult {
 	var findings []string
 	byMAC := map[string][]netbox.MACAddressRecord{}
 	for _, mac := range s.MACAddresses {
@@ -34,5 +35,5 @@ func auditMACConsistency(s netbox.Snapshot) checkResult {
 		}
 	}
 	sort.Strings(findings)
-	return checkResult{Name: "MAC Consistency", Findings: findings}
+	return CheckResult{Name: "MAC Consistency", Findings: findings}
 }

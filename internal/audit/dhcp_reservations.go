@@ -1,18 +1,19 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"sort"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditDHCPReservations(s netbox.Snapshot) checkResult {
-	reservedRanges := taggedRanges(s.IPRanges, tagDHCPReserved)
-	poolRanges := taggedRanges(s.IPRanges, tagDHCPPool)
+func DHCPReservations(s netbox.Snapshot) CheckResult {
+	reservedRanges := taggedRanges(s.IPRanges, TagDHCPReserved)
+	poolRanges := taggedRanges(s.IPRanges, TagDHCPPool)
 	var findings []string
 	findings = append(findings, overlappingRanges(reservedRanges, poolRanges)...)
 	for _, ip := range s.IPAddresses {
-		if !hasTag(ip.Tags, tagDHCPReserved) {
+		if !hasTag(ip.Tags, TagDHCPReserved) {
 			continue
 		}
 		if ip.AssignedObjectType != netbox.ObjectTypeInterface {
@@ -36,5 +37,5 @@ func auditDHCPReservations(s netbox.Snapshot) checkResult {
 		}
 	}
 	sort.Strings(findings)
-	return checkResult{Name: "DHCP Reservations", Findings: findings}
+	return CheckResult{Name: "DHCP Reservations", Findings: findings}
 }

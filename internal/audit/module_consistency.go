@@ -1,13 +1,14 @@
-package main
+package audit
 
 import (
-	netbox "network_maintainence_tools/internal/netbox"
 	"fmt"
 	"sort"
 	"strings"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
-func auditModuleConsistency(s netbox.Snapshot) checkResult {
+func ModuleConsistency(s netbox.Snapshot) CheckResult {
 	modsByBay := map[int][]netbox.Module{}
 	var findings []string
 	for _, mod := range s.Modules {
@@ -50,5 +51,5 @@ func auditModuleConsistency(s netbox.Snapshot) checkResult {
 		}
 	}
 	sort.Strings(findings)
-	return checkResult{Name: "Module Consistency", Findings: findings}
+	return CheckResult{Name: "Module Consistency", Findings: findings}
 }
