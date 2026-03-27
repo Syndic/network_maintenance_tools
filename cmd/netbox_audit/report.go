@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	netbox "network_maintainence_tools/internal/netbox"
 	"network_maintainence_tools/internal/shared"
 )
 
@@ -88,7 +89,7 @@ func printTextReport(rep report, colors colorizer) {
 
 	if len(rep.Timing.Snapshot.Fetches) > 0 {
 		fmt.Printf("Snapshot collections by duration:\n")
-		for _, fetch := range sortTimingDescending(rep.Timing.Snapshot.Fetches, func(f fetchTiming) time.Duration { return f.Duration }) {
+		for _, fetch := range sortTimingDescending(rep.Timing.Snapshot.Fetches, func(f netbox.FetchTiming) time.Duration { return f.Duration }) {
 			fmt.Printf("- %s: %s, %d requests, %d items\n", fetch.Name, formatDuration(fetch.Duration), fetch.Requests, fetch.Items)
 		}
 	}

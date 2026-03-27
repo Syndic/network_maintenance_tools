@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
 const (
@@ -157,7 +159,7 @@ func (c auditConfig) isWANRole(role string) bool {
 	return c.compiledWANRoleSet[role]
 }
 
-func (c auditConfig) isRackTagExempt(tags []tagRef) bool {
+func (c auditConfig) isRackTagExempt(tags []netbox.TagRef) bool {
 	for _, tag := range tags {
 		if c.compiledRackTagSet[tag.Slug] {
 			return true

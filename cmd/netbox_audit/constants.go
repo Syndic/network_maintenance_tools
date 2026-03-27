@@ -16,11 +16,9 @@ const (
 	deviceStatusPlanned = "planned"
 	roleAccessPoint     = "Access Point"
 	roleSwitch          = "Switch"
-	vlanModeAccess      = "access"
+	vlanModeAccess = "access"
 
-	objectTypeInterface = "dcim.interface"
-
-	tagHoneypot     = "honeypot"
+	tagHoneypot = "honeypot"
 	tagDHCPReserved = "dhcp-reserved"
 	tagDHCPPool     = "dhcp-pool"
 

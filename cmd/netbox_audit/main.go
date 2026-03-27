@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	netboxapi "network_maintainence_tools/internal/netbox"
+	netbox "network_maintainence_tools/internal/netbox"
 	"network_maintainence_tools/internal/shared"
 )
 
@@ -73,13 +73,13 @@ func main() {
 		fatalf("Invalid check selection: %v", err)
 	}
 
-	client := &netboxapi.Client{
+	client := &netbox.Client{
 		BaseURL: strings.TrimRight(*baseURL, "/"),
 		Token:   token,
 		HTTPClient: &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
-				MaxIdleConnsPerHost: snapshotTaskCount(),
+				MaxIdleConnsPerHost: netbox.SnapshotTaskCount(),
 			},
 		},
 	}
@@ -93,7 +93,7 @@ func main() {
 
 	runStarted := time.Now()
 	ctx := context.Background()
-	snap, err := loadConsistentSnapshot(ctx, client, *maxAttempts, *retryDelay, reporter)
+	snap, err := netbox.LoadConsistentSnapshot(ctx, client, *maxAttempts, *retryDelay, reporter)
 	if err != nil {
 		fatalf("Failed to load coherent NetBox snapshot: %v", err)
 	}

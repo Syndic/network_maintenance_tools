@@ -6,48 +6,50 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
 type Check interface {
 	ID() string
 	Name() string
-	Run(context.Context, snapshot, auditConfig) checkResult
+	Run(context.Context, netbox.Snapshot, auditConfig) checkResult
 }
 
 type simpleCheck struct {
 	id   string
 	name string
-	run  func(context.Context, snapshot, auditConfig) checkResult
+	run  func(context.Context, netbox.Snapshot, auditConfig) checkResult
 }
 
 func (c simpleCheck) ID() string   { return c.id }
 func (c simpleCheck) Name() string { return c.name }
-func (c simpleCheck) Run(ctx context.Context, snap snapshot, cfg auditConfig) checkResult {
+func (c simpleCheck) Run(ctx context.Context, snap netbox.Snapshot, cfg auditConfig) checkResult {
 	return c.run(ctx, snap, cfg)
 }
 
 func allChecks() []Check {
 	return []Check{
-		simpleCheck{"required-device-fields", "Required Device Fields", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditRequiredDeviceFields(s) }},
-		simpleCheck{"device-locations", "Device Locations", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditDeviceLocations(s) }},
-		simpleCheck{"parent-placement", "Parent Placement Consistency", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditParentPlacement(s) }},
-		simpleCheck{"rack-placement", "Rack Placement", func(_ context.Context, s snapshot, cfg auditConfig) checkResult { return auditRackPlacement(s, cfg) }},
-		simpleCheck{"device-type-drift", "Device Type Drift", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditDeviceTypeDrift(s) }},
-		simpleCheck{"honeypots", "Honeypot Coverage", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditHoneypots(s) }},
-		simpleCheck{"wireless-normalization", "Wireless Normalization", func(_ context.Context, s snapshot, cfg auditConfig) checkResult {
+		simpleCheck{"required-device-fields", "Required Device Fields", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditRequiredDeviceFields(s) }},
+		simpleCheck{"device-locations", "Device Locations", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditDeviceLocations(s) }},
+		simpleCheck{"parent-placement", "Parent Placement Consistency", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditParentPlacement(s) }},
+		simpleCheck{"rack-placement", "Rack Placement", func(_ context.Context, s netbox.Snapshot, cfg auditConfig) checkResult { return auditRackPlacement(s, cfg) }},
+		simpleCheck{"device-type-drift", "Device Type Drift", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditDeviceTypeDrift(s) }},
+		simpleCheck{"honeypots", "Honeypot Coverage", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditHoneypots(s) }},
+		simpleCheck{"wireless-normalization", "Wireless Normalization", func(_ context.Context, s netbox.Snapshot, cfg auditConfig) checkResult {
 			return auditWirelessNormalization(s, cfg)
 		}},
-		simpleCheck{"poe-power", "PoE Power Sufficiency", func(_ context.Context, s snapshot, cfg auditConfig) checkResult { return auditPOEPower(s, cfg) }},
-		simpleCheck{"interface-vrf", "Interface VRF Coverage", func(_ context.Context, s snapshot, cfg auditConfig) checkResult { return auditInterfaceVRF(s, cfg) }},
-		simpleCheck{"private-ip-vrf", "Private IP VRF Coverage", func(_ context.Context, s snapshot, cfg auditConfig) checkResult { return auditPrivateIPVRF(s, cfg) }},
-		simpleCheck{"ip-vlan", "IP / VLAN Consistency", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditIPVLANConsistency(s) }},
-		simpleCheck{"cables", "Cable Consistency", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditCables(s) }},
-		simpleCheck{"patch-panel", "Patch Panel Continuity", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditPatchPanelContinuity(s) }},
-		simpleCheck{"modules", "Module Consistency", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditModuleConsistency(s) }},
-		simpleCheck{"macs", "MAC Consistency", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditMACConsistency(s) }},
-		simpleCheck{"dhcp-reservations", "DHCP Reservations", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditDHCPReservations(s) }},
-		simpleCheck{"planned-devices", "Planned Device Hygiene", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditPlannedDevices(s) }},
-		simpleCheck{"switch-link-symmetry", "Switch Link Symmetry", func(_ context.Context, s snapshot, _ auditConfig) checkResult { return auditSwitchLinkSymmetry(s) }},
+		simpleCheck{"poe-power", "PoE Power Sufficiency", func(_ context.Context, s netbox.Snapshot, cfg auditConfig) checkResult { return auditPOEPower(s, cfg) }},
+		simpleCheck{"interface-vrf", "Interface VRF Coverage", func(_ context.Context, s netbox.Snapshot, cfg auditConfig) checkResult { return auditInterfaceVRF(s, cfg) }},
+		simpleCheck{"private-ip-vrf", "Private IP VRF Coverage", func(_ context.Context, s netbox.Snapshot, cfg auditConfig) checkResult { return auditPrivateIPVRF(s, cfg) }},
+		simpleCheck{"ip-vlan", "IP / VLAN Consistency", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditIPVLANConsistency(s) }},
+		simpleCheck{"cables", "Cable Consistency", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditCables(s) }},
+		simpleCheck{"patch-panel", "Patch Panel Continuity", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditPatchPanelContinuity(s) }},
+		simpleCheck{"modules", "Module Consistency", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditModuleConsistency(s) }},
+		simpleCheck{"macs", "MAC Consistency", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditMACConsistency(s) }},
+		simpleCheck{"dhcp-reservations", "DHCP Reservations", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditDHCPReservations(s) }},
+		simpleCheck{"planned-devices", "Planned Device Hygiene", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditPlannedDevices(s) }},
+		simpleCheck{"switch-link-symmetry", "Switch Link Symmetry", func(_ context.Context, s netbox.Snapshot, _ auditConfig) checkResult { return auditSwitchLinkSymmetry(s) }},
 	}
 }
 
@@ -89,7 +91,7 @@ func selectChecks(registry []Check, cfg auditConfig) ([]Check, error) {
 	return selected, nil
 }
 
-func runAudit(ctx context.Context, snap snapshot, cfg auditConfig, checks []Check, reporter *progressReporter) report {
+func runAudit(ctx context.Context, snap netbox.Snapshot, cfg auditConfig, checks []Check, reporter *progressReporter) report {
 	start := time.Now()
 	results := make([]checkResult, len(checks))
 	timings := make([]checkTiming, len(checks))

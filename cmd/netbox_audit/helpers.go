@@ -7,36 +7,50 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
 func poeSupplySufficient(supplyType, requiredType string, cfg auditConfig) (bool, string) {
+	var unknownTypesAllowed = cfg.Rules.PoEPower.UnknownTypePolicy == poeUnknownTypeIgnore
+
 	if requiredType == "" {
-		if cfg.Rules.PoEPower.UnknownTypePolicy == poeUnknownTypeIgnore {
+		if unknownTypesAllowed {
 			return true, ""
 		}
-		return false, "PD interface is missing poe_type"
+		return false, "Powered Device interface is missing poe_type"
 	}
+
+	// If we can't determine the rank of the required type, we can't determine if it's sufficient.
+	requiredRank, ok := poeTypeRank(requiredType)
+	if !ok {
+		if unknownTypesAllowed {
+			return true, ""
+		}
+		return false, "Powered Device interface has an unrecognized poe_type"
+	}
+
 	if supplyType == "" {
-		if cfg.Rules.PoEPower.UnknownTypePolicy == poeUnknownTypeIgnore {
+		if unknownTypesAllowed {
 			return true, ""
 		}
-		return false, "PSE interface is missing poe_type"
+		return false, "Power Supplying Equipment interface is missing poe_type"
 	}
-	if supplyType == requiredType {
-		return true, ""
-	}
-	if sr, ok := poeTypeRank(supplyType); ok {
-		if rr, ok := poeTypeRank(requiredType); ok {
-			if sr >= rr {
-				return true, ""
-			}
-			return false, "PSE PoE type is weaker than PD requirement"
+
+	// If we can't determine the rank of the supply type, we can't determine if it's sufficient.
+	supplyRank, ok := poeTypeRank(supplyType)
+	if !ok {
+		if unknownTypesAllowed {
+			return true, ""
 		}
+		return false, "Power Supplying Equipment interface has an unrecognized poe_type"
 	}
-	if cfg.Rules.PoEPower.UnknownTypePolicy == poeUnknownTypeIgnore {
+
+	//TODO: I'd like to add a tag to the model to indicate that a device is being powered directly instead of through PoE. This logic will need to change. Or maybe the logic that decides to call this could check for that tag and skip this check.
+	if supplyRank >= requiredRank {
 		return true, ""
 	}
-	return false, "PoE types are not directly comparable"
+	return false, "Power Supplying Equipment PoE type is weaker than Powered Device requirement"
 }
 
 func poeTypeRank(v string) (int, bool) {
@@ -54,13 +68,11 @@ func poeTypeRank(v string) (int, bool) {
 	}
 }
 
-func sameSwitchPortConfig(a, b iface) bool {
-	if choiceValue(a.Mode) != choiceValue(b.Mode) {
+func sameSwitchPortConfig(a, b netbox.Iface) bool {
+	if choiceValue(a.Mode) != choiceValue(b.Mode) || vlanID(a.UntaggedVLAN) != vlanID(b.UntaggedVLAN) {
 		return false
 	}
-	if vlanID(a.UntaggedVLAN) != vlanID(b.UntaggedVLAN) {
-		return false
-	}
+
 	at := taggedVLANIDs(a.TaggedVLANs)
 	bt := taggedVLANIDs(b.TaggedVLANs)
 	if len(at) != len(bt) {
@@ -74,8 +86,7 @@ func sameSwitchPortConfig(a, b iface) bool {
 	return true
 }
 
-
-func parsePrefixes(prefixes []prefix) []parsedPrefix {
+func parsePrefixes(prefixes []netbox.Prefix) []parsedPrefix {
 	out := make([]parsedPrefix, 0, len(prefixes))
 	for _, p := range prefixes {
 		net, err := netip.ParsePrefix(p.Prefix)
@@ -101,8 +112,8 @@ func bestPrefixMatch(prefixes []parsedPrefix, addr netip.Addr, vrf int) *parsedP
 	return nil
 }
 
-func taggedRanges(ranges []ipRange, slug string) []ipRange {
-	var out []ipRange
+func taggedRanges(ranges []netbox.IPRange, slug string) []netbox.IPRange {
+	var out []netbox.IPRange
 	for _, r := range ranges {
 		if hasTag(r.Tags, slug) {
 			out = append(out, r)
@@ -111,7 +122,7 @@ func taggedRanges(ranges []ipRange, slug string) []ipRange {
 	return out
 }
 
-func overlappingRanges(a, b []ipRange) []string {
+func overlappingRanges(a, b []netbox.IPRange) []string {
 	var findings []string
 	for _, ra := range a {
 		astart, aok := parseAddr(ra.StartAddress)
@@ -141,7 +152,7 @@ func rangesOverlap(aStart, aEnd, bStart, bEnd netip.Addr) bool {
 	return aStart.Compare(bEnd) <= 0 && bStart.Compare(aEnd) <= 0
 }
 
-func ipInRanges(ip ipAddress, ranges []ipRange) bool {
+func ipInRanges(ip netbox.IPAddress, ranges []netbox.IPRange) bool {
 	addr, ok := bareAddr(ip.Address)
 	if !ok {
 		return false
@@ -162,7 +173,7 @@ func ipInRanges(ip ipAddress, ranges []ipRange) bool {
 	return false
 }
 
-func resolveMAC(it iface) (mac string, ok bool, multi bool) {
+func resolveMAC(it netbox.Iface) (mac string, ok bool, multi bool) {
 	if it.PrimaryMACAddress != nil && it.PrimaryMACAddress.MACAddress != "" {
 		return it.PrimaryMACAddress.MACAddress, true, len(it.MACAddresses) > 1
 	}
@@ -178,12 +189,12 @@ func resolveMAC(it iface) (mac string, ok bool, multi bool) {
 	return "", false, false
 }
 
-func interfaceHasMAC(it iface) bool {
+func interfaceHasMAC(it netbox.Iface) bool {
 	_, ok, _ := resolveMAC(it)
 	return ok
 }
 
-func wiredInterfaceComplete(it iface, ips []ipAddress) bool {
+func wiredInterfaceComplete(it netbox.Iface, ips []netbox.IPAddress) bool {
 	return len(it.ConnectedEndpoints) > 0 && (it.VRF != nil || it.Mode != nil || it.UntaggedVLAN != nil || len(ips) > 0 || interfaceHasMAC(it))
 }
 
@@ -191,7 +202,7 @@ func isWirelessType(t string) bool {
 	return strings.HasPrefix(t, wirelessTypePrefix)
 }
 
-func isWANInterface(it iface, dev device, devices map[int]device, cfg auditConfig) bool {
+func isWANInterface(it netbox.Iface, dev netbox.Device, devices map[int]netbox.Device, cfg auditConfig) bool {
 	if cfg.isWANRole(dev.Role.Name) {
 		return true
 	}
@@ -216,7 +227,7 @@ func derefBool(v *bool) bool {
 	return *v
 }
 
-func choiceValue(v *choice) string {
+func choiceValue(v *netbox.Choice) string {
 	if v == nil {
 		return ""
 	}
@@ -244,14 +255,14 @@ func parseAddr(value string) (netip.Addr, bool) {
 	return bareAddr(value)
 }
 
-func vrfID(vrf *vrfRef) int {
+func vrfID(vrf *netbox.VRFRef) int {
 	if vrf == nil {
 		return 0
 	}
 	return vrf.ID
 }
 
-func hasTag(tags []tagRef, slug string) bool {
+func hasTag(tags []netbox.TagRef, slug string) bool {
 	for _, tag := range tags {
 		if tag.Slug == slug {
 			return true
@@ -264,7 +275,7 @@ func normalizeMAC(v string) string {
 	return strings.ToUpper(strings.TrimSpace(v))
 }
 
-func describeAssignedObject(obj *assignedObjectRef) string {
+func describeAssignedObject(obj *netbox.AssignedObjectRef) string {
 	if obj == nil {
 		return "<unassigned>"
 	}
@@ -360,7 +371,7 @@ func parsePortNumber(name string) (int, bool) {
 	return n, err == nil
 }
 
-func moduleBayName(mod module) string {
+func moduleBayName(mod netbox.Module) string {
 	if mod.ModuleBay == nil {
 		return "module"
 	}
@@ -378,54 +389,54 @@ func expandModuleTemplateName(templateName, bayName string) string {
 	return strings.ReplaceAll(templateName, "{module}", token)
 }
 
-func frontTemplatesToTyped(in []frontPortTemplate) []typedComponentTemplate {
-	out := make([]typedComponentTemplate, 0, len(in))
+func frontTemplatesToTyped(in []netbox.FrontPortTemplate) []netbox.TypedComponentTemplate {
+	out := make([]netbox.TypedComponentTemplate, 0, len(in))
 	for _, fp := range in {
-		out = append(out, typedComponentTemplate{ID: fp.ID, DeviceType: fp.DeviceType, ModuleType: fp.ModuleType, Name: fp.Name, Type: fp.Type})
+		out = append(out, netbox.TypedComponentTemplate{ID: fp.ID, DeviceType: fp.DeviceType, ModuleType: fp.ModuleType, Name: fp.Name, Type: fp.Type})
 	}
 	return out
 }
 
-func rearTemplatesToTyped(in []rearPortTemplate) []typedComponentTemplate {
-	out := make([]typedComponentTemplate, 0, len(in))
+func rearTemplatesToTyped(in []netbox.RearPortTemplate) []netbox.TypedComponentTemplate {
+	out := make([]netbox.TypedComponentTemplate, 0, len(in))
 	for _, rp := range in {
-		out = append(out, typedComponentTemplate{ID: rp.ID, DeviceType: rp.DeviceType, ModuleType: rp.ModuleType, Name: rp.Name, Type: rp.Type})
+		out = append(out, netbox.TypedComponentTemplate{ID: rp.ID, DeviceType: rp.DeviceType, ModuleType: rp.ModuleType, Name: rp.Name, Type: rp.Type})
 	}
 	return out
 }
 
-func frontPortsToTyped(in []frontPort) []typedComponent {
-	out := make([]typedComponent, 0, len(in))
+func frontPortsToTyped(in []netbox.FrontPort) []netbox.TypedComponent {
+	out := make([]netbox.TypedComponent, 0, len(in))
 	for _, fp := range in {
-		out = append(out, typedComponent{ID: fp.ID, Name: fp.Name, Device: fp.Device, Module: fp.Module, Type: fp.Type})
+		out = append(out, netbox.TypedComponent{ID: fp.ID, Name: fp.Name, Device: fp.Device, Module: fp.Module, Type: fp.Type})
 	}
 	return out
 }
 
-func rearPortsToTyped(in []rearPort) []typedComponent {
-	out := make([]typedComponent, 0, len(in))
+func rearPortsToTyped(in []netbox.RearPort) []netbox.TypedComponent {
+	out := make([]netbox.TypedComponent, 0, len(in))
 	for _, rp := range in {
-		out = append(out, typedComponent{ID: rp.ID, Name: rp.Name, Device: rp.Device, Module: rp.Module, Type: rp.Type})
+		out = append(out, netbox.TypedComponent{ID: rp.ID, Name: rp.Name, Device: rp.Device, Module: rp.Module, Type: rp.Type})
 	}
 	return out
 }
 
-func moduleBaysToNamed(in []moduleBay) []namedComponent {
-	out := make([]namedComponent, 0, len(in))
+func moduleBaysToNamed(in []netbox.ModuleBay) []netbox.NamedComponent {
+	out := make([]netbox.NamedComponent, 0, len(in))
 	for _, mb := range in {
-		out = append(out, namedComponent{ID: mb.ID, Name: mb.Name, Device: mb.Device, Module: mb.Module})
+		out = append(out, netbox.NamedComponent{ID: mb.ID, Name: mb.Name, Device: mb.Device, Module: mb.Module})
 	}
 	return out
 }
 
-func vlanID(v *vlanRef) int {
+func vlanID(v *netbox.VLANRef) int {
 	if v == nil {
 		return 0
 	}
 	return v.ID
 }
 
-func taggedVLANIDs(vlans []vlanRef) []int {
+func taggedVLANIDs(vlans []netbox.VLANRef) []int {
 	out := make([]int, 0, len(vlans))
 	for _, vlan := range vlans {
 		out = append(out, vlan.ID)

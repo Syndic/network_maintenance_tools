@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	netboxapi "network_maintainence_tools/internal/netbox"
+	netbox "network_maintainence_tools/internal/netbox"
 )
 
 type progressReporter struct {
@@ -40,11 +40,11 @@ func (p *progressReporter) SnapshotTaskStart(name string) {
 	p.Printf("Snapshot fetch started: %s", name)
 }
 
-func (p *progressReporter) SnapshotTaskComplete(done, total int, stats fetchTiming, totalRequests int) {
+func (p *progressReporter) SnapshotTaskComplete(done, total int, stats netbox.FetchTiming, totalRequests int) {
 	p.Printf("Snapshot %d/%d complete: %s (%d requests, %d items, %s). Requests so far: %d", done, total, stats.Name, stats.Requests, stats.Items, formatDuration(stats.Duration), totalRequests)
 }
 
-func (p *progressReporter) SnapshotAttemptRetry(attempt, max int, retryDelay time.Duration, startChange, endChange netboxapi.ObjectChange) {
+func (p *progressReporter) SnapshotAttemptRetry(attempt, max int, retryDelay time.Duration, startChange, endChange netbox.ObjectChange) {
 	p.Printf("NetBox changed during snapshot load (%d -> %d); retrying %d/%d after %s", startChange.ID, endChange.ID, attempt, max, retryDelay)
 }
 

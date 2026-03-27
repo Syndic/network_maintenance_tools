@@ -1,0 +1,36 @@
+package main
+
+import (
+	netbox "network_maintainence_tools/internal/netbox"
+	"fmt"
+	"sort"
+)
+
+func auditSwitchLinkSymmetry(s netbox.Snapshot) checkResult {
+	var findings []string
+	for _, c := range s.Cables {
+		if len(c.ATerminations) != 1 || len(c.BTerminations) != 1 {
+			continue
+		}
+		a := c.ATerminations[0]
+		b := c.BTerminations[0]
+		if a.ObjectType != netbox.ObjectTypeInterface || b.ObjectType != netbox.ObjectTypeInterface {
+			continue
+		}
+		ia, oka := s.InterfacesByID[a.ObjectID]
+		ib, okb := s.InterfacesByID[b.ObjectID]
+		if !oka || !okb {
+			continue
+		}
+		da := s.DevicesByID[ia.Device.ID]
+		db := s.DevicesByID[ib.Device.ID]
+		if da.Role.Name != roleSwitch || db.Role.Name != roleSwitch {
+			continue
+		}
+		if !sameSwitchPortConfig(ia, ib) {
+			findings = append(findings, fmt.Sprintf("switch link cable #%d is asymmetric: %s %s vs %s %s", c.ID, da.Name, ia.Name, db.Name, ib.Name))
+		}
+	}
+	sort.Strings(findings)
+	return checkResult{Name: "Switch Link Symmetry", Findings: findings}
+}
