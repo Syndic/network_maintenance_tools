@@ -41,12 +41,12 @@ func main() {
 		}
 	})
 
-	stdoutColors, err := newColorizer(*colorMode, os.Stdout)
+	stdoutColors, err := shared.NewColorizer(*colorMode, os.Stdout)
 	if err != nil {
 		fatalf("Invalid color mode %q: %v", *colorMode, err)
 	}
 	stderrColors = stdoutColors
-	if colors, err := newColorizer(*colorMode, os.Stderr); err == nil {
+	if colors, err := shared.NewColorizer(*colorMode, os.Stderr); err == nil {
 		stderrColors = colors
 	}
 

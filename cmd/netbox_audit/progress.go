@@ -8,6 +8,7 @@ import (
 	"time"
 
 	netbox "network_maintainence_tools/internal/netbox"
+	"network_maintainence_tools/internal/shared"
 )
 
 type progressReporter struct {
@@ -41,7 +42,7 @@ func (p *progressReporter) SnapshotTaskStart(name string) {
 }
 
 func (p *progressReporter) SnapshotTaskComplete(done, total int, stats netbox.FetchTiming, totalRequests int) {
-	p.Printf("Snapshot %d/%d complete: %s (%d requests, %d items, %s). Requests so far: %d", done, total, stats.Name, stats.Requests, stats.Items, formatDuration(stats.Duration), totalRequests)
+	p.Printf("Snapshot %d/%d complete: %s (%d requests, %d items, %s). Requests so far: %d", done, total, stats.Name, stats.Requests, stats.Items, shared.FormatDuration(stats.Duration), totalRequests)
 }
 
 func (p *progressReporter) SnapshotAttemptRetry(attempt, max int, retryDelay time.Duration, startChange, endChange netbox.ObjectChange) {
@@ -53,7 +54,7 @@ func (p *progressReporter) ChecksStart(total int) {
 }
 
 func (p *progressReporter) CheckCompleted(done, total int, timing checkTiming) {
-	p.Printf("Check %d/%d complete: %s (%d findings, %s)", done, total, timing.Name, timing.Findings, formatDuration(timing.Duration))
+	p.Printf("Check %d/%d complete: %s (%d findings, %s)", done, total, timing.Name, timing.Findings, shared.FormatDuration(timing.Duration))
 }
 
 func (p *progressReporter) ChecksComplete(total int) {
