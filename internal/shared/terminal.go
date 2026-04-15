@@ -23,18 +23,18 @@ func FormatDuration(d time.Duration) string {
 
 // Colorizer wraps text in ANSI escape codes when color is enabled.
 type Colorizer struct {
-	Enabled bool
+	enabled bool
 }
 
 // NewColorizer creates a Colorizer for the given color mode and output file.
 func NewColorizer(mode string, file *os.File) (Colorizer, error) {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "", ColorAuto:
-		return Colorizer{Enabled: shouldColor(file)}, nil
+		return Colorizer{enabled: shouldColor(file)}, nil
 	case ColorAlways:
-		return Colorizer{Enabled: true}, nil
+		return Colorizer{enabled: true}, nil
 	case ColorNever:
-		return Colorizer{Enabled: false}, nil
+		return Colorizer{enabled: false}, nil
 	default:
 		return Colorizer{}, fmt.Errorf("expected %s, %s, or %s", ColorAuto, ColorAlways, ColorNever)
 	}
@@ -56,7 +56,7 @@ func shouldColor(file *os.File) bool {
 }
 
 func (c Colorizer) wrap(code, text string) string {
-	if !c.Enabled {
+	if !c.enabled {
 		return text
 	}
 	return code + text + "\033[0m"

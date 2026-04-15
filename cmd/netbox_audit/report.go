@@ -2,14 +2,11 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	netbox "network_maintainence_tools/internal/netbox"
 	"network_maintainence_tools/internal/shared"
 )
-
-var stderrColors shared.Colorizer
 
 func totalFindings(rep report) int {
 	total := 0
@@ -30,11 +27,15 @@ func printTextReport(rep report, colors shared.Colorizer) {
 		}
 	}
 
-	fmt.Printf("Snapshot: %d attempt(s), latest change #%d at %s\n", rep.Snapshot.Attempts, rep.Snapshot.Change.ID, rep.Snapshot.Change.Time)
+	fmt.Printf("Snapshot: %d attempt(s), latest change #%d\n", rep.Snapshot.Attempts, rep.Snapshot.Change.ID)
 	fmt.Printf("Checks: %d\n", len(rep.Checks))
 	fmt.Printf("Checks with findings: %d\n", checksWithFindings)
 	fmt.Printf("Total findings: %d\n", totalFindings(rep))
-	fmt.Printf("Timing: total=%s, snapshot=%s (%d requests)\n", shared.FormatDuration(rep.Timing.Total), shared.FormatDuration(rep.Timing.Snapshot.Duration), rep.Timing.Snapshot.RequestCount)
+	fmt.Printf("Timing: total=%s, snapshot=%s (%d requests)\n",
+		shared.FormatDuration(rep.Timing.Total),
+		shared.FormatDuration(rep.Timing.Snapshot.Duration),
+		rep.Timing.Snapshot.RequestCount,
+	)
 
 	if len(rep.Timing.Snapshot.Fetches) > 0 {
 		fmt.Printf("Snapshot collections by duration:\n")
@@ -73,13 +74,4 @@ func printTextReport(rep report, colors shared.Colorizer) {
 			}
 		}
 	}
-}
-
-func fatalf(format string, args ...any) {
-	if stderrColors.Enabled {
-		fmt.Fprintf(os.Stderr, "%s %s\n", stderrColors.Fail(shared.StatusFail), fmt.Sprintf(format, args...))
-	} else {
-		fmt.Fprintf(os.Stderr, "%s %s\n", shared.StatusFail, fmt.Sprintf(format, args...))
-	}
-	os.Exit(1)
 }

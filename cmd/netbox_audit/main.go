@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -12,6 +13,13 @@ import (
 	netbox "network_maintainence_tools/internal/netbox"
 	"network_maintainence_tools/internal/shared"
 )
+
+var stderrColors shared.Colorizer
+
+func fatalf(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "%s %s\n", stderrColors.Fail(shared.StatusFail), fmt.Sprintf(format, args...))
+	os.Exit(1)
+}
 
 func main() {
 	configEnvValue := strings.TrimSpace(os.Getenv(envNetBoxAuditCfg))

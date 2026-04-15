@@ -42,11 +42,23 @@ func (p *progressReporter) SnapshotTaskStart(name string) {
 }
 
 func (p *progressReporter) SnapshotTaskComplete(done, total int, stats netbox.FetchTiming, totalRequests int) {
-	p.Printf("Snapshot %d/%d complete: %s (%d requests, %d items, %s). Requests so far: %d", done, total, stats.Name, stats.Requests, stats.Items, shared.FormatDuration(stats.Duration), totalRequests)
+	p.Printf("Snapshot %d/%d complete: %s (%d requests, %d items, %s). Requests so far: %d",
+		done,
+		total,
+		stats.Name,
+		stats.Requests,
+		stats.Items,
+		shared.FormatDuration(stats.Duration),
+		totalRequests,
+	)
 }
 
-func (p *progressReporter) SnapshotAttemptRetry(attempt, max int, retryDelay time.Duration, startChange, endChange netbox.ObjectChange) {
-	p.Printf("NetBox changed during snapshot load (%d -> %d); retrying %d/%d after %s", startChange.ID, endChange.ID, attempt, max, retryDelay)
+func (p *progressReporter) SnapshotLoadError(attempt, maxAttempts int, err error) {
+	p.Printf("Snapshot attempt %d/%d failed: %v", attempt, maxAttempts, err)
+}
+
+func (p *progressReporter) SnapshotLoadRetryDelay(delay time.Duration) {
+	p.Printf("Delaying for %s before retry", shared.FormatDuration(delay))
 }
 
 func (p *progressReporter) ChecksStart(total int) {
@@ -54,7 +66,13 @@ func (p *progressReporter) ChecksStart(total int) {
 }
 
 func (p *progressReporter) CheckCompleted(done, total int, timing checkTiming) {
-	p.Printf("Check %d/%d complete: %s (%d findings, %s)", done, total, timing.Name, timing.Findings, shared.FormatDuration(timing.Duration))
+	p.Printf("Check %d/%d complete: %s (%d findings, %s)",
+		done,
+		total,
+		timing.Name,
+		timing.Findings,
+		shared.FormatDuration(timing.Duration),
+	)
 }
 
 func (p *progressReporter) ChecksComplete(total int) {

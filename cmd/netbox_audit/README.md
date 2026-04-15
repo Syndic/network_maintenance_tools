@@ -4,7 +4,7 @@ A Go tool that audits a NetBox network inventory for consistency issues. It load
 
 ## Quick start
 
-From inside `network_maintainence_tools/`:
+From the root of the repository:
 
 ```bash
 go run ./cmd/netbox_audit \

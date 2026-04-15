@@ -17,7 +17,8 @@ type LoadObserver interface {
 	SnapshotAttemptStart(attempt, maxAttempts, taskCount int)
 	SnapshotTaskStart(name string)
 	SnapshotTaskComplete(completed, total int, stats FetchTiming, totalRequests int)
-	SnapshotAttemptRetry(attempt, maxAttempts int, delay time.Duration, before, after ObjectChange)
+	SnapshotLoadError(attempt, maxAttempts int, err error)
+	SnapshotLoadRetryDelay(delay time.Duration)
 }
 
 // LoadConsistentSnapshot fetches a consistent snapshot from NetBox, retrying
@@ -35,6 +36,9 @@ func LoadConsistentSnapshot(ctx context.Context, client *Client, maxAttempts int
 		}
 		snap, err := loadSnapshot(ctx, client, obs)
 		if err != nil {
+			if obs != nil {
+				obs.SnapshotLoadError(attempt, maxAttempts, err)
+			}
 			lastErr = err
 			continue
 		}
@@ -42,29 +46,25 @@ func LoadConsistentSnapshot(ctx context.Context, client *Client, maxAttempts int
 		if err != nil {
 			return Snapshot{}, err
 		}
-		if startChange.ID == endChange.ID && startChange.Time == endChange.Time {
+		if startChange.ID == endChange.ID {
 			snap.LatestChange = endChange
 			snap.SnapshotAttempts = attempt
 			snap.LoadStats.Duration = time.Since(totalStart)
 			return snap, nil
 		}
-		lastErr = fmt.Errorf("snapshot changed during load (%d -> %d)", startChange.ID, endChange.ID)
+		lastErr = fmt.Errorf("NetBox state changed during load (%d -> %d)", startChange.ID, endChange.ID)
 		if obs != nil {
-			obs.SnapshotAttemptRetry(attempt, maxAttempts, retryDelay, startChange, endChange)
+			obs.SnapshotLoadError(attempt, maxAttempts, lastErr)
 		}
 		if attempt < maxAttempts {
+			obs.SnapshotLoadRetryDelay(retryDelay)
 			time.Sleep(retryDelay)
 		}
 	}
 	if lastErr == nil {
-		lastErr = errors.New("unable to capture coherent snapshot")
+		lastErr = errors.New("Ran out of attempts to capture a coherent snapshot. Gave up.")
 	}
 	return Snapshot{}, lastErr
-}
-
-// SnapshotTaskCount returns the number of parallel fetch tasks in a snapshot load.
-func SnapshotTaskCount() int {
-	return len(snapshotTasks())
 }
 
 type snapshotTask struct {
@@ -72,134 +72,60 @@ type snapshotTask struct {
 	run  func(context.Context, *Client, *Snapshot) (FetchTiming, error)
 }
 
-func snapshotTasks() []snapshotTask {
-	return []snapshotTask{
-		{"devices", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[Device](ctx, c, "/api/dcim/devices/")
-			s.Devices = data
+func fetchTask[T any](name, path string, set func(*Snapshot, []T)) snapshotTask {
+	return snapshotTask{
+		name: name,
+		run: func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
+			data, stats, err := fetchAll[T](ctx, c, path)
+			set(s, data)
 			return stats, err
-		}},
-		{"interfaces", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[Iface](ctx, c, "/api/dcim/interfaces/")
-			s.Interfaces = data
-			return stats, err
-		}},
-		{"interface-templates", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[InterfaceTemplate](ctx, c, "/api/dcim/interface-templates/")
-			s.InterfaceTemplates = data
-			return stats, err
-		}},
-		{"console-ports", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[TypedComponent](ctx, c, "/api/dcim/console-ports/")
-			s.ConsolePorts = data
-			return stats, err
-		}},
-		{"console-port-templates", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[TypedComponentTemplate](ctx, c, "/api/dcim/console-port-templates/")
-			s.ConsolePortTemplates = data
-			return stats, err
-		}},
-		{"console-server-ports", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[TypedComponent](ctx, c, "/api/dcim/console-server-ports/")
-			s.ConsoleServerPorts = data
-			return stats, err
-		}},
-		{"console-server-port-templates", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[TypedComponentTemplate](ctx, c, "/api/dcim/console-server-port-templates/")
-			s.ConsoleServerPortTemplates = data
-			return stats, err
-		}},
-		{"power-ports", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[TypedComponent](ctx, c, "/api/dcim/power-ports/")
-			s.PowerPorts = data
-			return stats, err
-		}},
-		{"power-port-templates", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[TypedComponentTemplate](ctx, c, "/api/dcim/power-port-templates/")
-			s.PowerPortTemplates = data
-			return stats, err
-		}},
-		{"power-outlets", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[TypedComponent](ctx, c, "/api/dcim/power-outlets/")
-			s.PowerOutlets = data
-			return stats, err
-		}},
-		{"power-outlet-templates", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[TypedComponentTemplate](ctx, c, "/api/dcim/power-outlet-templates/")
-			s.PowerOutletTemplates = data
-			return stats, err
-		}},
-		{"front-ports", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[FrontPort](ctx, c, "/api/dcim/front-ports/")
-			s.FrontPorts = data
-			return stats, err
-		}},
-		{"front-port-templates", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[FrontPortTemplate](ctx, c, "/api/dcim/front-port-templates/")
-			s.FrontPortTemplates = data
-			return stats, err
-		}},
-		{"rear-ports", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[RearPort](ctx, c, "/api/dcim/rear-ports/")
-			s.RearPorts = data
-			return stats, err
-		}},
-		{"rear-port-templates", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[RearPortTemplate](ctx, c, "/api/dcim/rear-port-templates/")
-			s.RearPortTemplates = data
-			return stats, err
-		}},
-		{"device-bays", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[NamedComponent](ctx, c, "/api/dcim/device-bays/")
-			s.DeviceBays = data
-			return stats, err
-		}},
-		{"device-bay-templates", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[NamedComponentTemplate](ctx, c, "/api/dcim/device-bay-templates/")
-			s.DeviceBayTemplates = data
-			return stats, err
-		}},
-		{"module-bays", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[ModuleBay](ctx, c, "/api/dcim/module-bays/")
-			s.ModuleBays = data
-			return stats, err
-		}},
-		{"module-bay-templates", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[NamedComponentTemplate](ctx, c, "/api/dcim/module-bay-templates/")
-			s.ModuleBayTemplates = data
-			return stats, err
-		}},
-		{"modules", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[Module](ctx, c, "/api/dcim/modules/")
-			s.Modules = data
-			return stats, err
-		}},
-		{"ip-addresses", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[IPAddress](ctx, c, "/api/ipam/ip-addresses/")
-			s.IPAddresses = data
-			return stats, err
-		}},
-		{"ip-ranges", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[IPRange](ctx, c, "/api/ipam/ip-ranges/")
-			s.IPRanges = data
-			return stats, err
-		}},
-		{"prefixes", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[Prefix](ctx, c, "/api/ipam/prefixes/")
-			s.Prefixes = data
-			return stats, err
-		}},
-		{"cables", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[Cable](ctx, c, "/api/dcim/cables/")
-			s.Cables = data
-			return stats, err
-		}},
-		{"mac-addresses", func(ctx context.Context, c *Client, s *Snapshot) (FetchTiming, error) {
-			data, stats, err := fetchAll[MACAddressRecord](ctx, c, "/api/dcim/mac-addresses/")
-			s.MACAddresses = data
-			return stats, err
-		}},
+		},
 	}
+}
+
+func fetchDcimTask[T any](name string, set func(*Snapshot, []T)) snapshotTask {
+	return fetchTask(name, "/api/dcim/"+name+"/", set)
+}
+
+func fetchIpamTask[T any](name string, set func(*Snapshot, []T)) snapshotTask {
+	return fetchTask(name, "/api/ipam/"+name+"/", set)
+}
+
+var tasks = []snapshotTask{
+	fetchDcimTask("devices", func(s *Snapshot, v []Device) { s.Devices = v }),
+	fetchDcimTask("interfaces", func(s *Snapshot, v []Iface) { s.Interfaces = v }),
+	fetchDcimTask("interface-templates", func(s *Snapshot, v []InterfaceTemplate) { s.InterfaceTemplates = v }),
+	fetchDcimTask("console-ports", func(s *Snapshot, v []TypedComponent) { s.ConsolePorts = v }),
+	fetchDcimTask("console-port-templates", func(s *Snapshot, v []TypedComponentTemplate) { s.ConsolePortTemplates = v }),
+	fetchDcimTask("console-server-ports", func(s *Snapshot, v []TypedComponent) { s.ConsoleServerPorts = v }),
+	fetchDcimTask("console-server-port-templates", func(s *Snapshot, v []TypedComponentTemplate) { s.ConsoleServerPortTemplates = v }),
+	fetchDcimTask("power-ports", func(s *Snapshot, v []TypedComponent) { s.PowerPorts = v }),
+	fetchDcimTask("power-port-templates", func(s *Snapshot, v []TypedComponentTemplate) { s.PowerPortTemplates = v }),
+	fetchDcimTask("power-outlets", func(s *Snapshot, v []TypedComponent) { s.PowerOutlets = v }),
+	fetchDcimTask("power-outlet-templates", func(s *Snapshot, v []TypedComponentTemplate) { s.PowerOutletTemplates = v }),
+	fetchDcimTask("front-ports", func(s *Snapshot, v []FrontPort) { s.FrontPorts = v }),
+	fetchDcimTask("front-port-templates", func(s *Snapshot, v []FrontPortTemplate) { s.FrontPortTemplates = v }),
+	fetchDcimTask("rear-ports", func(s *Snapshot, v []RearPort) { s.RearPorts = v }),
+	fetchDcimTask("rear-port-templates", func(s *Snapshot, v []RearPortTemplate) { s.RearPortTemplates = v }),
+	fetchDcimTask("device-bays", func(s *Snapshot, v []NamedComponent) { s.DeviceBays = v }),
+	fetchDcimTask("device-bay-templates", func(s *Snapshot, v []NamedComponentTemplate) { s.DeviceBayTemplates = v }),
+	fetchDcimTask("module-bays", func(s *Snapshot, v []ModuleBay) { s.ModuleBays = v }),
+	fetchDcimTask("module-bay-templates", func(s *Snapshot, v []NamedComponentTemplate) { s.ModuleBayTemplates = v }),
+	fetchDcimTask("modules", func(s *Snapshot, v []Module) { s.Modules = v }),
+	fetchIpamTask("ip-addresses", func(s *Snapshot, v []IPAddress) { s.IPAddresses = v }),
+	fetchIpamTask("ip-ranges", func(s *Snapshot, v []IPRange) { s.IPRanges = v }),
+	fetchIpamTask("prefixes", func(s *Snapshot, v []Prefix) { s.Prefixes = v }),
+	fetchDcimTask("cables", func(s *Snapshot, v []Cable) { s.Cables = v }),
+	fetchDcimTask("mac-addresses", func(s *Snapshot, v []MACAddressRecord) { s.MACAddresses = v }),
+}
+
+func snapshotTasks() []snapshotTask {
+	return tasks
+}
+
+// SnapshotTaskCount returns the number of parallel fetch tasks in a snapshot load.
+func SnapshotTaskCount() int {
+	return len(tasks)
 }
 
 func loadSnapshot(ctx context.Context, c *Client, obs LoadObserver) (Snapshot, error) {
@@ -225,10 +151,12 @@ func loadSnapshot(ctx context.Context, c *Client, obs LoadObserver) (Snapshot, e
 			results <- taskResult{name: task.name, stats: stats, err: err}
 		}()
 	}
+
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
+
 	completedTasks := 0
 	totalRequests := 0
 	var fetches []FetchTiming

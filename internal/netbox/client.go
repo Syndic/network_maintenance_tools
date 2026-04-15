@@ -33,7 +33,6 @@ type Client struct {
 
 type ObjectChange struct {
 	ID      int    `json:"id"`
-	Time    string `json:"time"`
 	Display string `json:"display"`
 }
 
